@@ -1,10 +1,26 @@
 import type { Metadata, Viewport } from "next";
-import { Baloo_Thambi_2, Hind_Madurai } from "next/font/google";
+import localFont from "next/font/local";
 import { AppProvider } from "@/lib/store";
 import "./globals.css";
 
-const baloo = Baloo_Thambi_2({ subsets: ["latin", "tamil"], weight: ["600", "700"], variable: "--f-baloo", display: "swap" });
-const hind = Hind_Madurai({ subsets: ["latin", "tamil"], weight: ["400", "500", "600", "700"], variable: "--f-hind", display: "swap" });
+// Self-hosted (OFL, same files as the apps): no Google Fonts download at build time.
+const baloo = localFont({
+  src: [
+    { path: "./fonts/BalooThambi2-600.ttf", weight: "600" },
+    { path: "./fonts/BalooThambi2-700.ttf", weight: "700" },
+  ],
+  variable: "--f-baloo",
+  display: "swap",
+});
+const hind = localFont({
+  src: [
+    { path: "./fonts/HindMadurai-Regular.ttf", weight: "400" },
+    { path: "./fonts/HindMadurai-Medium.ttf", weight: "500" },
+    { path: "./fonts/HindMadurai-SemiBold.ttf", weight: "600 700" },
+  ],
+  variable: "--f-hind",
+  display: "swap",
+});
 
 export const metadata: Metadata = {
   title: "InnTown Hotel",
