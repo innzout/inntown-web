@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Switch } from "@/components/ui";
 import { patch, put, type Hotel, type Hours } from "@/lib/api";
 import { DAYS } from "@/lib/content";
+import { check, LIMITS, onlyDigits, rupees } from "@/lib/validate";
 import { useApp } from "@/lib/store";
 
 // Monday first, like a printed timetable.
@@ -22,9 +23,10 @@ export default function SettingsPage() {
   const setHour = (dow: number, p: Partial<Hours>) => setHours((hs) => hs.map((h) => (h.dow === dow ? { ...h, ...p } : h)));
 
   const save = async () => {
-    if (!f.name.trim()) return toast("Hotel name cannot be empty");
-    if (!/^\d{10}$/.test(f.phone)) return toast("Enter a 10-digit phone number");
-    if (f.fssai && !/^\d{14}$/.test(f.fssai)) return toast("FSSAI number has 14 digits");
+    if (busy) return; // no double submit
+    if (f.prep_min < 5) return toast("Preparation time is 5 to 90 minutes");
+    const bad = check.required(f.name, "the hotel name") || check.phone(f.phone) || check.fssai(f.fssai) || check.upi(f.upi);
+    if (bad) return toast(bad);
     if (hours.some((h) => h.is_open && h.opens >= h.closes)) return toast("Each open day must open before it closes");
     setBusy(true);
     const h = await run(patch<Hotel>("/v1/hotel/me", { ...f, name: f.name.trim() }));
@@ -36,12 +38,27 @@ export default function SettingsPage() {
     }
   };
 
-  const text = (label: string, k: "name" | "phone" | "address" | "area" | "fssai" | "upi", type = "text") => (
-    <div>
-      <label className="fl" htmlFor={`s_${k}`}>{label}</label>
-      <input className="fld" id={`s_${k}`} type={type} value={f[k]} onChange={(e) => set(k, e.target.value)} />
-    </div>
-  );
+  // Per-field limits and filters, so a value can never be longer or stranger than the API accepts.
+  const FIELD = {
+    name: { max: LIMITS.name, digits: false, err: () => check.required(f.name, "the hotel name") },
+    phone: { max: LIMITS.phone, digits: true, err: () => (f.phone.length === LIMITS.phone || !f.phone ? check.phone(f.phone) : "") },
+    address: { max: LIMITS.address, digits: false, err: () => "" },
+    area: { max: LIMITS.area, digits: false, err: () => "" },
+    fssai: { max: LIMITS.fssai, digits: true, err: () => (f.fssai.length === LIMITS.fssai ? check.fssai(f.fssai) : "") },
+    upi: { max: LIMITS.upi, digits: false, err: () => (f.upi.includes("@") ? check.upi(f.upi) : "") },
+  } as const;
+  const text = (label: string, k: keyof typeof FIELD, type = "text") => {
+    const { max, digits, err } = FIELD[k];
+    const msg = err();
+    return (
+      <div>
+        <label className="fl" htmlFor={`s_${k}`}>{label}</label>
+        <input className="fld" id={`s_${k}`} type={type} maxLength={max} inputMode={digits ? "numeric" : undefined} aria-invalid={!!msg}
+          value={f[k]} onChange={(e) => set(k, digits ? onlyDigits(e.target.value, max) : e.target.value)} />
+        {msg && <div className="err">{msg}</div>}
+      </div>
+    );
+  };
 
   return (
     <>
@@ -70,8 +87,8 @@ export default function SettingsPage() {
           <div className="card">
             <div className="bh" style={{ fontSize: 18, marginBottom: 12 }}>Orders</div>
             <div className="col" style={{ gap: 12 }}>
-              <div><label className="fl" htmlFor="s_prep">Usual preparation time (minutes)</label><input className="fld" id="s_prep" type="number" min={5} max={90} value={f.prep_min} onChange={(e) => set("prep_min", +e.target.value)} /></div>
-              <div><label className="fl" htmlFor="s_pack">Packaging charge per order (₹)</label><input className="fld" id="s_pack" type="number" min={0} max={50} value={f.pack_fee} onChange={(e) => set("pack_fee", +e.target.value)} /></div>
+              <div><label className="fl" htmlFor="s_prep">Usual preparation time (minutes)</label><input className="fld" id="s_prep" inputMode="numeric" maxLength={2} value={f.prep_min || ""} onChange={(e) => set("prep_min", rupees(e.target.value, 90))} aria-invalid={f.prep_min < 5} />{f.prep_min < 5 && <div className="err">Between 5 and 90 minutes.</div>}</div>
+              <div><label className="fl" htmlFor="s_pack">Packaging charge per order (₹)</label><input className="fld" id="s_pack" inputMode="numeric" maxLength={2} value={f.pack_fee} onChange={(e) => set("pack_fee", rupees(e.target.value, LIMITS.packFeeMax))} /><div className="xs muted">₹0 to ₹{LIMITS.packFeeMax}</div></div>
               <div className="row sb">
                 <div><b>Order alert sound</b><div className="xs muted">Plays on this device when a new order arrives</div></div>
                 <Switch on={sound} label="Order sound" onChange={() => { setSound(!sound); if (!sound) setTimeout(beep, 50); }} />

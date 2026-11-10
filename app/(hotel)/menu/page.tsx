@@ -5,6 +5,7 @@ import { Icon } from "@/components/Icon";
 import { Modal, Switch, VegMark } from "@/components/ui";
 import { del, get, patch, post, type Category, type FoodType, type Item } from "@/lib/api";
 import { inr } from "@/lib/format";
+import { check, LIMITS, rupees } from "@/lib/validate";
 import { useApp } from "@/lib/store";
 
 type Draft = { id: string | null; category_id: string; name: string; description: string; price: number; half_price: number; food_type: FoodType };
@@ -40,6 +41,8 @@ export default function MenuPage() {
   const save = async () => {
     if (!draft) return;
     if (!draft.name.trim() || !(draft.price > 0)) return setErr("Please enter a dish name and a price.");
+    const priceErr = check.price(draft.price);
+    if (priceErr) return setErr(priceErr);
     if (draft.half_price && draft.half_price >= draft.price) return setErr("Half price must be less than the full price.");
     const { id, ...body } = draft;
     const ok = await run(id ? patch<Item>(`/v1/hotel/menu/items/${id}`, body) : post<Item>("/v1/hotel/menu/items", body), id ? "Dish updated" : "Dish added");
@@ -117,8 +120,8 @@ export default function MenuPage() {
           <div className="col" style={{ gap: 12, marginTop: 12 }}>
             <div><label className="fl" htmlFor="i_name">Dish name</label><input className="fld" id="i_name" maxLength={50} value={draft.name} onChange={(e) => set("name", e.target.value)} /></div>
             <div className="grid2" style={{ gap: 12 }}>
-              <div><label className="fl" htmlFor="i_price">Price (₹)</label><input className="fld" id="i_price" type="number" min={1} value={draft.price || ""} onChange={(e) => set("price", +e.target.value)} /></div>
-              <div><label className="fl" htmlFor="i_half">Half price (optional)</label><input className="fld" id="i_half" type="number" min={0} value={draft.half_price || ""} onChange={(e) => set("half_price", +e.target.value)} /></div>
+              <div><label className="fl" htmlFor="i_price">Price (₹)</label><input className="fld" id="i_price" inputMode="numeric" maxLength={4} value={draft.price || ""} onChange={(e) => set("price", rupees(e.target.value, LIMITS.priceMax))} /></div>
+              <div><label className="fl" htmlFor="i_half">Half price (optional)</label><input className="fld" id="i_half" inputMode="numeric" maxLength={4} value={draft.half_price || ""} onChange={(e) => set("half_price", rupees(e.target.value, LIMITS.priceMax))} /></div>
             </div>
             <div>
               <label className="fl" htmlFor="i_cat">Category</label>

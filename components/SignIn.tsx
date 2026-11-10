@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { ApiError, auth, type Role } from "@/lib/api";
 import { useApp } from "@/lib/store";
+import { check, LIMITS, onlyDigits } from "@/lib/validate";
 import { Icon } from "./Icon";
 import { Logo, OtpInput } from "./ui";
 
@@ -16,7 +17,10 @@ export function SignIn({ role, title, points, onDone }: { role: Role; title: str
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
 
+  const phoneErr = phone.length === LIMITS.phone ? check.phone(phone) : "";
+
   const send = async () => {
+    if (busy || check.phone(phone)) return;
     setBusy(true);
     setErr("");
     try {
@@ -31,6 +35,7 @@ export function SignIn({ role, title, points, onDone }: { role: Role; title: str
     }
   };
   const verify = async (c = code) => {
+    if (busy || !/^\d{6}$/.test(c)) return; // no double submit; codes are 6 digits
     setBusy(true);
     setErr("");
     try {
@@ -63,15 +68,16 @@ export function SignIn({ role, title, points, onDone }: { role: Role; title: str
           <h2 style={{ fontSize: 28 }}>Sign in</h2>
           <p className="muted">{step === "code" ? `Enter the 6-digit code sent to +91 ${phone}` : "Use the mobile number registered with InnTown."}</p>
           {step === "phone" ? (
-            <form onSubmit={(e) => { e.preventDefault(); if (phone.length === 10) void send(); }}>
+            <form onSubmit={(e) => { e.preventDefault(); void send(); }}>
               <label className="fl" htmlFor="ph">Mobile number</label>
               <div className="row">
                 <b>+91</b>
                 <input className="fld" id="ph" type="tel" inputMode="numeric" autoComplete="tel-national" placeholder="98765 43210" autoFocus
-                  value={phone} onChange={(e) => setPhone(e.target.value.replace(/\D/g, "").slice(0, 10))} />
+                  value={phone} onChange={(e) => setPhone(onlyDigits(e.target.value, LIMITS.phone))} aria-invalid={!!phoneErr} />
               </div>
+              {phoneErr && <div className="err">{phoneErr}</div>}
               {err && <div className="err" role="alert">{err}</div>}
-              <button className="btn full" style={{ marginTop: 16 }} disabled={phone.length !== 10 || busy}>{busy ? "Sending…" : "Send code"}</button>
+              <button className="btn full" style={{ marginTop: 16 }} disabled={!!check.phone(phone) || busy}>{busy ? "Sending…" : "Send code"}</button>
             </form>
           ) : (
             <>
