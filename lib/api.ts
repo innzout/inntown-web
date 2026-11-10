@@ -1,6 +1,8 @@
 // Typed client for inntown-api. Set NEXT_PUBLIC_API_URL (default http://localhost:8090).
 
-export const API_URL = (process.env.NEXT_PUBLIC_API_URL || "http://localhost:8090").replace(/\/$/, "");
+const rawApiUrl = (process.env.NEXT_PUBLIC_API_URL || "http://localhost:8090").trim().replace(/\/+$/, "");
+// A bare host ("x.up.railway.app") would be fetched as a path on this site; assume https.
+export const API_URL = /^https?:\/\//.test(rawApiUrl) ? rawApiUrl : `https://${rawApiUrl}`;
 
 export type Role = "customer" | "hotel" | "partner" | "ops";
 export type FoodType = "veg" | "nonveg";
