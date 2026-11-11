@@ -33,6 +33,9 @@ export interface Order {
 export interface Notice { id: number; icon: string; title: string; body: string; read: boolean; at: string }
 export interface Review { id: string; order_no: number; customer: string; stars: number; text: string; reply: string; created_at: string }
 /** The commission deal as it applies to this hotel today. */
+/** Support contacts from GET /v1/app/config. Empty strings until the numbers are set on the server. */
+export interface Support { phone: string; whatsapp: string; email: string }
+
 export interface CommissionTerms { percent: number; free_days: number; free_until: string | null; free_now: boolean }
 export interface Earnings {
   days: { date: string; sales: number; commission: number; net: number; orders: number }[];

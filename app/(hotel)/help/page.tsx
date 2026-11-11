@@ -1,13 +1,28 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Icon } from "@/components/Icon";
+import { api, type Support } from "@/lib/api";
 import { FAQ } from "@/lib/content";
 import { useApp } from "@/lib/store";
+
+/** Digits only, with India's 91 added to a bare 10-digit mobile number. */
+function withCountryCode(n: string): string {
+  const digits = n.replace(/\D/g, "");
+  return digits.length === 10 ? `91${digits}` : digits;
+}
 
 export default function HelpPage() {
   const { toast } = useApp();
   const [open, setOpen] = useState(-1);
+  // Contacts are server settings (SUPPORT_*), so a new number needs no web release.
+  const [support, setSupport] = useState<Support | null>(null);
+  useEffect(() => {
+    api<{ support: Support }>("GET", "/v1/app/config")
+      .then((c) => setSupport(c.support))
+      .catch(() => setSupport({ phone: "", whatsapp: "", email: "" }));
+  }, []);
+  const notYet = () => toast(support?.email ? `Write to ${support.email} for now` : "Support contacts are being set up");
   return (
     <>
       <div className="ph">
@@ -26,14 +41,28 @@ export default function HelpPage() {
                 <div className="sm muted">10 am to 10 pm</div>
               </div>
             </div>
-            {/* TODO: real support number and WhatsApp link once registered. */}
-            <button className="btn full" style={{ marginTop: 12 }} onClick={() => toast("Support number will be added before launch")}>Call InnTown</button>
+            {support?.phone ? (
+              <a className="btn full" style={{ marginTop: 12 }} href={`tel:+${withCountryCode(support.phone)}`}>Call InnTown</a>
+            ) : (
+              <button className="btn full" style={{ marginTop: 12 }} disabled={!support} onClick={notYet}>Call InnTown</button>
+            )}
           </div>
           <div className="card">
             <b>WhatsApp</b>
             <div className="sm muted">Send a message and we reply within minutes.</div>
-            <button className="btn o full" style={{ marginTop: 12 }} onClick={() => toast("WhatsApp number will be added before launch")}>Chat on WhatsApp</button>
+            {support?.whatsapp ? (
+              <a className="btn o full" style={{ marginTop: 12 }} href={`https://wa.me/${withCountryCode(support.whatsapp)}`} target="_blank" rel="noopener noreferrer">Chat on WhatsApp</a>
+            ) : (
+              <button className="btn o full" style={{ marginTop: 12 }} disabled={!support} onClick={notYet}>Chat on WhatsApp</button>
+            )}
           </div>
+          {support?.email && (
+            <div className="card">
+              <b>Email</b>
+              <div className="sm muted">For bills, commission and anything that needs a record.</div>
+              <a className="btn o full" style={{ marginTop: 12 }} href={`mailto:${support.email}`}>{support.email}</a>
+            </div>
+          )}
         </div>
         <div className="card">
           <div className="bh" style={{ fontSize: 19, marginBottom: 4 }}>Common questions</div>
