@@ -19,6 +19,14 @@ export default function MenuPage() {
   const [err, setErr] = useState("");
   const [delItem, setDelItem] = useState<Item | null>(null);
   const [newCat, setNewCat] = useState<string | null>(null);
+  // One request at a time from any dialog: a second click must not add the same dish twice.
+  const [busy, setBusy] = useState(false);
+  const [tried, setTried] = useState(false);
+  const once = async (work: () => Promise<void>) => {
+    if (busy) return;
+    setBusy(true);
+    try { await work(); } finally { setBusy(false); }
+  };
 
   const load = useCallback(async () => {
     const c = await run(get<Category[]>("/v1/hotel/menu"));
@@ -33,21 +41,30 @@ export default function MenuPage() {
 
   const edit = (i?: Item) => {
     setErr("");
+    setTried(false);
     if (!cats.length) return toast("Add a category first");
     setDraft(i ? { id: i.id, category_id: i.category_id, name: i.name, description: i.description, price: i.price, half_price: i.half_price, food_type: i.food_type }
       : { id: null, category_id: cat ?? cats[0].id, name: "", description: "", price: 0, half_price: 0, food_type: "veg" });
   };
   const set = <K extends keyof Draft>(k: K, v: Draft[K]) => setDraft((d) => (d ? { ...d, [k]: v } : d));
-  const save = async () => {
+  // Field errors, shown under each field after the first Save.
+  const dishErrs = draft
+    ? {
+        name: check.required(draft.name, "the dish name"),
+        price: draft.price ? check.price(draft.price) : "Enter the price.",
+        half: draft.half_price && draft.half_price >= draft.price ? "Half price must be less than the full price." : "",
+      }
+    : { name: "", price: "", half: "" };
+  const dishErr = (k: keyof typeof dishErrs) => (tried && dishErrs[k] ? <div className="err">{dishErrs[k]}</div> : null);
+  const save = () => once(async () => {
     if (!draft) return;
-    if (!draft.name.trim() || !(draft.price > 0)) return setErr("Please enter a dish name and a price.");
-    const priceErr = check.price(draft.price);
-    if (priceErr) return setErr(priceErr);
-    if (draft.half_price && draft.half_price >= draft.price) return setErr("Half price must be less than the full price.");
+    setTried(true);
+    if (Object.values(dishErrs).some(Boolean)) return setErr("Please fix the fields marked in red.");
+    setErr("");
     const { id, ...body } = draft;
-    const ok = await run(id ? patch<Item>(`/v1/hotel/menu/items/${id}`, body) : post<Item>("/v1/hotel/menu/items", body), id ? "Dish updated" : "Dish added");
+    const ok = await run(id ? patch<Item>(`/v1/hotel/menu/items/${id}`, { ...body, name: body.name.trim(), description: body.description.trim() }) : post<Item>("/v1/hotel/menu/items", { ...body, name: body.name.trim(), description: body.description.trim() }), id ? "Dish updated" : "Dish added");
     if (ok) { setDraft(null); void load(); }
-  };
+  });
   const toggle = async (i: Item) => {
     // Optimistic: flip now, undo if the server says no.
     setCats((cs) => cs!.map((c) => ({ ...c, items: c.items.map((x) => (x.id === i.id ? { ...x, is_available: !x.is_available } : x)) })));
@@ -118,10 +135,10 @@ export default function MenuPage() {
         <Modal onClose={() => setDraft(null)}>
           <h2>{draft.id ? "Edit dish" : "Add dish"}</h2>
           <div className="col" style={{ gap: 12, marginTop: 12 }}>
-            <div><label className="fl" htmlFor="i_name">Dish name</label><input className="fld" id="i_name" maxLength={50} value={draft.name} onChange={(e) => set("name", e.target.value)} /></div>
+            <div><label className="fl" htmlFor="i_name">Dish name</label><input className="fld" id="i_name" maxLength={50} value={draft.name} onChange={(e) => set("name", e.target.value)} aria-invalid={tried && !!dishErrs.name} />{dishErr("name")}</div>
             <div className="grid2" style={{ gap: 12 }}>
-              <div><label className="fl" htmlFor="i_price">Price (₹)</label><input className="fld" id="i_price" inputMode="numeric" maxLength={4} value={draft.price || ""} onChange={(e) => set("price", rupees(e.target.value, LIMITS.priceMax))} /></div>
-              <div><label className="fl" htmlFor="i_half">Half price (optional)</label><input className="fld" id="i_half" inputMode="numeric" maxLength={4} value={draft.half_price || ""} onChange={(e) => set("half_price", rupees(e.target.value, LIMITS.priceMax))} /></div>
+              <div><label className="fl" htmlFor="i_price">Price (₹)</label><input className="fld" id="i_price" inputMode="numeric" maxLength={4} value={draft.price || ""} onChange={(e) => set("price", rupees(e.target.value, LIMITS.priceMax))} aria-invalid={tried && !!dishErrs.price} />{dishErr("price")}</div>
+              <div><label className="fl" htmlFor="i_half">Half price (optional)</label><input className="fld" id="i_half" inputMode="numeric" maxLength={4} value={draft.half_price || ""} onChange={(e) => set("half_price", rupees(e.target.value, LIMITS.priceMax))} aria-invalid={tried && !!dishErrs.half} />{dishErr("half")}</div>
             </div>
             <div>
               <label className="fl" htmlFor="i_cat">Category</label>
@@ -143,8 +160,8 @@ export default function MenuPage() {
             {err && <div className="err" role="alert">{err}</div>}
           </div>
           <div className="row" style={{ marginTop: 18 }}>
-            <button className="btn o grow" onClick={() => setDraft(null)}>Cancel</button>
-            <button className="btn grow" onClick={save}>Save dish</button>
+            <button className="btn o grow" disabled={busy} onClick={() => setDraft(null)}>Cancel</button>
+            <button className="btn grow" disabled={busy} onClick={save}>{busy ? "Saving…" : "Save dish"}</button>
           </div>
         </Modal>
       )}
@@ -154,8 +171,8 @@ export default function MenuPage() {
           <h2>Delete {delItem.name}?</h2>
           <p className="muted">This removes it from your menu. If you only want to pause it, switch off Available instead.</p>
           <div className="row">
-            <button className="btn o grow" onClick={() => setDelItem(null)}>Keep</button>
-            <button className="btn red grow" onClick={async () => { if (await run(del(`/v1/hotel/menu/items/${delItem.id}`).then(() => true), "Dish deleted")) { setDelItem(null); void load(); } }}>Delete</button>
+            <button className="btn o grow" disabled={busy} onClick={() => setDelItem(null)}>Keep</button>
+            <button className="btn red grow" disabled={busy} onClick={() => once(async () => { if (await run(del(`/v1/hotel/menu/items/${delItem.id}`).then(() => true), "Dish deleted")) { setDelItem(null); void load(); } })}>{busy ? "Deleting…" : "Delete"}</button>
           </div>
         </Modal>
       )}
@@ -166,12 +183,13 @@ export default function MenuPage() {
           <label className="fl" htmlFor="c_name" style={{ marginTop: 12 }}>Category name</label>
           <input className="fld" id="c_name" placeholder="For example, Desserts" maxLength={30} value={newCat} onChange={(e) => setNewCat(e.target.value)} />
           <div className="row" style={{ marginTop: 18 }}>
-            <button className="btn o grow" onClick={() => setNewCat(null)}>Cancel</button>
-            <button className="btn grow" onClick={async () => {
+            <button className="btn o grow" disabled={busy} onClick={() => setNewCat(null)}>Cancel</button>
+            <button className="btn grow" disabled={busy} onClick={() => once(async () => {
               if (!newCat.trim()) return toast("Type a category name");
+              if (cats.some((c) => c.name.toLowerCase() === newCat.trim().toLowerCase())) return toast("That category already exists");
               const c = await run(post<Category>("/v1/hotel/menu/categories", { name: newCat.trim(), sort: cats.length + 1 }), "Category added");
               if (c) { setNewCat(null); void load(); }
-            }}>Add</button>
+            })}>{busy ? "Adding…" : "Add"}</button>
           </div>
         </Modal>
       )}

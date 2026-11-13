@@ -85,12 +85,18 @@ export function Stat({ label, value, icon }: { label: string; value: ReactNode; 
 
 export function Modal({ children, onClose, wide }: { children: ReactNode; onClose: () => void; wide?: boolean }) {
   const box = useRef<HTMLDivElement>(null);
+  // Callers pass a new onClose on every render; keep the latest in a ref so the effects below
+  // run once. (Re-running them on each keystroke moved the cursor back to the first field.)
+  const close = useRef(onClose);
+  close.current = onClose;
   useEffect(() => {
-    const k = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    box.current?.querySelector<HTMLElement>("input,textarea,select,button.btn:not(.o)")?.focus();
+  }, []);
+  useEffect(() => {
+    const k = (e: KeyboardEvent) => e.key === "Escape" && close.current();
     document.addEventListener("keydown", k);
-    box.current?.querySelector<HTMLElement>("input,button.btn:not(.o)")?.focus();
     return () => document.removeEventListener("keydown", k);
-  }, [onClose]);
+  }, []);
   return (
     <div className="mbg" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
       <div className={`mdl ${wide ? "lg" : ""}`} role="dialog" aria-modal="true" ref={box}>
@@ -131,12 +137,12 @@ export function OtpInput({ value, onChange, bad, onEnter, length = 4 }: { value:
   };
   return (
     <div className={`otp ${bad ? "bad" : ""}`} onPaste={(e) => {
-      const t = e.clipboardData.getData("text").replace(/D/g, "").slice(0, length);
+      const t = e.clipboardData.getData("text").replace(/\D/g, "").slice(0, length);
       if (t) { e.preventDefault(); onChange(t); refs.current[Math.min(t.length, length - 1)]?.focus(); }
     }}>
       {digits.map((d, i) => (
         <input key={i} ref={(el) => { refs.current[i] = el; }} inputMode="numeric" maxLength={1} aria-label={`Digit ${i + 1}`} value={d}
-          onChange={(e) => { const c = e.target.value.replace(/D/g, "").slice(-1); set(i, c); if (c) refs.current[i + 1]?.focus(); }}
+          onChange={(e) => { const c = e.target.value.replace(/\D/g, "").slice(-1); set(i, c); if (c) refs.current[i + 1]?.focus(); }}
           onKeyDown={(e) => {
             if (e.key === "Backspace" && !d) refs.current[i - 1]?.focus();
             if (e.key === "Enter" && value.length === length) onEnter?.();

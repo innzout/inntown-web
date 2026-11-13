@@ -40,9 +40,17 @@ export default function OpsOrders() {
     setReason("");
     get<Partner[]>("/v1/ops/partners").then((p) => setPartners(p.filter((x) => x.status === "active"))).catch(() => {});
   };
+  const [acting, setActing] = useState(false);
+  // One action at a time: assigning or releasing twice would hit the order twice.
   const act = async (path: string, body: unknown, ok: string) => {
-    const r = await run(post<Order>(path, body), ok);
-    if (r) { await openOrder(r.id); void load(); }
+    if (acting) return;
+    setActing(true);
+    try {
+      const r = await run(post<Order>(path, body), ok);
+      if (r) { await openOrder(r.id); void load(); }
+    } finally {
+      setActing(false);
+    }
   };
 
   const o = sel?.order;
@@ -99,13 +107,13 @@ export default function OpsOrders() {
                     <option value="">Nearest free partner (automatic)</option>
                     {partners.map((p) => <option key={p.id} value={p.id}>{p.name} {p.is_online ? "· online" : "· offline"}{p.busy ? " · busy" : ""}</option>)}
                   </select>
-                  <button className="btn" onClick={() => act(`/v1/ops/orders/${o.id}/assign`, { partner_id: pick }, "Partner assigned")}>Assign</button>
+                  <button className="btn" disabled={acting} onClick={() => act(`/v1/ops/orders/${o.id}/assign`, { partner_id: pick }, "Partner assigned")}>Assign</button>
                 </div>
               )}
-              {o.wrong_otp >= 3 && <button className="btn y" onClick={() => act(`/v1/ops/orders/${o.id}/release`, {}, "Order released")}>Release hold (customer confirmed)</button>}
+              {o.wrong_otp >= 3 && <button className="btn y" disabled={acting} onClick={() => act(`/v1/ops/orders/${o.id}/release`, {}, "Order released")}>Release hold (customer confirmed)</button>}
               <div className="row wrap">
                 <input className="fld grow" aria-label="Cancel reason" placeholder="Reason for cancelling" value={reason} onChange={(e) => setReason(e.target.value)} />
-                <button className="btn red" disabled={!reason.trim()} onClick={() => act(`/v1/ops/orders/${o.id}/cancel`, { reason }, "Order cancelled and refunded")}>Cancel order</button>
+                <button className="btn red" disabled={acting || !reason.trim()} onClick={() => act(`/v1/ops/orders/${o.id}/cancel`, { reason }, "Order cancelled and refunded")}>Cancel order</button>
               </div>
             </div>
           )}
