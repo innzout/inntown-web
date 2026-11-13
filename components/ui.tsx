@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, type ReactNode } from "react";
+import { useEffect, useRef, type ReactNode, useState } from "react";
 import { StarIcon } from "./Icon";
 import type { FoodType, PayMethod } from "@/lib/api";
 
@@ -97,6 +97,25 @@ export function Modal({ children, onClose, wide }: { children: ReactNode; onClos
         {children}
       </div>
     </div>
+  );
+}
+
+/** Ask before a destructive or hard-to-undo action. The confirm button shows progress and cannot be pressed twice. */
+export function ConfirmModal({ title, message, confirmLabel, cancelLabel = "Keep", onConfirm, onClose }: {
+  title: string; message: string; confirmLabel: string; cancelLabel?: string; onConfirm: () => Promise<unknown> | void; onClose: () => void;
+}) {
+  const [busy, setBusy] = useState(false);
+  return (
+    <Modal onClose={() => !busy && onClose()}>
+      <h2>{title}</h2>
+      <p className="muted">{message}</p>
+      <div className="row">
+        <button className="btn o grow" disabled={busy} onClick={onClose}>{cancelLabel}</button>
+        <button className="btn red grow" disabled={busy} onClick={async () => { setBusy(true); try { await onConfirm(); } finally { setBusy(false); onClose(); } }}>
+          {busy ? "Please wait…" : confirmLabel}
+        </button>
+      </div>
+    </Modal>
   );
 }
 

@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { get, post } from "@/lib/api";
 import { fmtDate, fmtTime, inr } from "@/lib/format";
 import { useApp } from "@/lib/store";
+import { ConfirmModal } from "@/components/ui";
 
 interface Row {
   id: string; name: string; phone: string; vehicle_no: string; status: string; docs_ok: boolean; is_online: boolean; last_seen: string | null;
@@ -13,6 +14,7 @@ interface Row {
 export default function OpsPartners() {
   const { run } = useApp();
   const [rows, setRows] = useState<Row[] | null>(null);
+  const [toSuspend, setToSuspend] = useState<Row | null>(null);
   const load = useCallback(() => run(get<Row[]>("/v1/ops/partners")).then((r) => r && setRows(r)), [run]);
   useEffect(() => { void load(); const t = setInterval(load, 20_000); return () => clearInterval(t); }, [load]);
 
@@ -21,6 +23,15 @@ export default function OpsPartners() {
   };
   return (
     <>
+      {toSuspend && (
+        <ConfirmModal
+          title={`Suspend ${toSuspend.name || "this partner"}?`}
+          message="They go offline at once and cannot take deliveries until you approve them again."
+          confirmLabel="Suspend partner"
+          onConfirm={() => set(toSuspend.id, { status: "suspended", reason: "Suspended by InnTown Ops" }, "Partner suspended")}
+          onClose={() => setToSuspend(null)}
+        />
+      )}
       <div className="ph"><div><h1>Partners</h1><div className="muted sm">Approve partners after checking licence, RC, insurance and pollution certificate.</div></div></div>
       <div className="card" style={{ padding: 0 }}>
         <div className="tw">
@@ -39,7 +50,7 @@ export default function OpsPartners() {
                   <td><span className={`tag ${p.status === "active" ? "t-ok" : p.status === "pending" ? "t-warn" : "t-bad"}`}>{p.status}</span></td>
                   <td>
                     {p.status === "active"
-                      ? <button className="btn d s" onClick={() => set(p.id, { status: "suspended", reason: "Suspended by InnTown Ops" }, "Partner suspended")}>Suspend</button>
+                      ? <button className="btn d s" onClick={() => setToSuspend(p)}>Suspend</button>
                       : <button className="btn s" onClick={() => set(p.id, { status: "active", docs_ok: true }, "Partner approved")}>Approve</button>}
                   </td>
                 </tr>
