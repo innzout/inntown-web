@@ -15,6 +15,11 @@ type Stat = "" | "delivered" | "rejected" | "expired" | "cancelled";
 export default function HistoryPage() {
   const { run, toast } = useApp();
   const [q, setQ] = useState("");
+  // Opened from a notification: show that order number.
+  useEffect(() => {
+    const from = new URLSearchParams(window.location.search).get("q");
+    if (from) setQ(from.replace(/\D/g, "").slice(0, 8));
+  }, []);
   const [range, setRange] = useState<Range>("30");
   const [stat, setStat] = useState<Stat>("");
   const [page, setPage] = useState(0);

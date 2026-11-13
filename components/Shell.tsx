@@ -29,6 +29,15 @@ export function Shell({ children, nav = HOTEL_NAV, title, subtitle, foot }: { ch
   const router = useRouter();
   const [open, setNav] = useState(false);
   const [pop, setPop] = useState<"bell" | "acct" | null>(null);
+
+  /** "New order #12" → the order: on the live board while active, otherwise in History. */
+  const openNotice = (n: { title: string }) => {
+    setPop(null);
+    const no = n.title.match(/#(\d+)/)?.[1];
+    if (!no) return router.push(n.title.toLowerCase().includes("review") ? "/reviews" : "/orders");
+    const live = orders.some((o) => String(o.no) === no);
+    router.push(live ? "/orders" : `/history?q=${no}`);
+  };
   const [confirm, setConfirm] = useState<"close" | "logout" | null>(null);
   const waiting = orders.filter((o) => o.status === "placed").length;
   const isHotel = user?.role === "hotel" && !!hotel;
@@ -98,10 +107,10 @@ export function Shell({ children, nav = HOTEL_NAV, title, subtitle, foot }: { ch
                   <button className="btn g s" onClick={markRead}>Mark all read</button>
                 </div>
                 {notices.length ? notices.slice(0, 10).map((n) => (
-                  <div className="ni" key={n.id}>
+                  <button className="ni" key={n.id} onClick={() => openNotice(n)} style={{ width: "100%", textAlign: "left", background: "none", border: 0, cursor: "pointer", font: "inherit", color: "inherit" }}>
                     <span className="nic"><Icon name={n.icon} size={18} color="var(--leaf)" /></span>
                     <div><b style={{ fontWeight: n.read ? 400 : 600 }}>{n.title}</b><div className="xs muted">{n.body} · {fmtTime(n.at)}</div></div>
-                  </div>
+                  </button>
                 )) : <div className="empty">No notifications</div>}
               </div>
             )}

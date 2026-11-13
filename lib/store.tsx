@@ -168,7 +168,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
         beep();
         toast(`New order #${o.no}`);
       },
-      "order.updated": (d) => upsertOrder(d as Order),
+      "order.updated": (d) => {
+        const o = d as Order;
+        upsertOrder(o);
+        const why = { expired: "was not accepted in time", cancelled: "was cancelled" }[o.status as string];
+        if (why) { beep(); toast(`Order #${o.no} ${why}. See History.`); }
+      },
       notice: (d) => {
         setNotices((l) => [d as Notice, ...l].slice(0, 30));
         setUnread((n) => n + 1);
